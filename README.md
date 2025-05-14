@@ -18,7 +18,8 @@ This Terraform module creates a complete VPC infrastructure on AWS with public a
 
 ```hcl
 module "vpc" {
-  source = "github.com/yourusername/vpc-module"
+  source  = "Isrealade/vpc/aws"
+  version = "1.0.0"
 
   name = "my-vpc"
   cidr = "10.0.0.0/16"
@@ -34,7 +35,8 @@ module "vpc" {
 
 ```hcl
 module "vpc" {
-  source = "github.com/yourusername/vpc-module"
+  source  = "Isrealade/vpc/aws"
+  version = "1.0.0"
 
   name = "my-vpc"
   cidr = "10.0.0.0/16"
