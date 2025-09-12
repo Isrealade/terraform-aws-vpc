@@ -68,7 +68,7 @@ resource "aws_eip" "eip" {
 resource "aws_nat_gateway" "nat" {
   count         = length(var.private_subnet)
   allocation_id = aws_eip.eip[count.index].id
-  subnet_id     = aws_subnet.private[count.index].id
+  subnet_id     = aws_subnet.public[count.index % length(aws_subnet.public)].id
   depends_on    = [aws_internet_gateway.igw]
 
   tags = merge(var.tags, { Name = "${var.name}-${count.index}" })
