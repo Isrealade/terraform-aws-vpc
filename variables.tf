@@ -54,6 +54,18 @@ variable "private_subnet" {
   EOT
 }
 
+variable "public_subnet_tags" {
+  description = "Additional tags to apply to public subnets"
+  type        = map(string)
+  default     = {}
+}
+
+variable "private_subnet_tags" {
+  description = "Additional tags to apply to private subnets"
+  type        = map(string)
+  default     = {}
+}
+
 variable "private_ip_map" {
   type    = bool
   default = false
