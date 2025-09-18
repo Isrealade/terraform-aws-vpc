@@ -2,7 +2,7 @@ variable "name" {
   type = string
 
   description = <<-EOT
-  The name tag that will be applied to all resources in the VPC module including:
+  The name tag that will be applied to all resources in the VPC module, including:
   - VPC
   - Subnets (public and private)
   - Internet Gateway
@@ -13,11 +13,21 @@ variable "name" {
   EOT
 }
 
+variable "region" {
+  type    = string
+  default = ""
+
+  description = <<-EOT
+  The AWS region to deploy the VPC to. 
+  If left empty, Terraform will use the provider's configured region.
+  EOT
+}
+
 variable "cidr" {
   type = string
 
   description = <<-EOT
-  The CIDR block for the VPC. This defines the IP address range for the entire VPC.
+  The CIDR block for the VPC. Defines the IP address range for the VPC.
   Example: "10.0.0.0/16" for a VPC with 65,536 IP addresses.
   EOT
 }
@@ -27,43 +37,106 @@ variable "azs" {
   default = []
 
   description = <<-EOT
-  List of availability zones for creating subnets. If not specified, 
-  the availability zones are fetched automatically using the available zones in the region.
+  List of availability zones for creating subnets. 
+  If not specified, Terraform automatically fetches available AZs in the region.
   EOT
 }
 
 variable "public_subnet" {
   type    = list(string)
   default = []
+  validation {
+    condition     = !(length(var.public_subnet) > 0 && var.public_subnet_count > 0)
+    error_message = "Provide either public_subnet OR public_subnet_count, not both."
+  }
 
   description = <<-EOT
-  List of CIDR blocks for public subnets. These subnets will have direct access to the internet
-  through an Internet Gateway. Each subnet should be a subset of the VPC CIDR block.
+  List of CIDR blocks for public subnets. These subnets have direct Internet access.
+  Each subnet must be a subset of the VPC CIDR block.
   Example: ["10.0.1.0/24", "10.0.2.0/24"] for two public subnets.
+  EOT
+}
+
+variable "public_subnet_count" {
+  type    = number
+  default = 0
+
+  description = <<-EOT
+  The number of public subnets to auto-generate if `public_subnet` is not provided.
   EOT
 }
 
 variable "private_subnet" {
   type    = list(string)
   default = []
+  validation {
+    condition     = !(length(var.private_subnet) > 0 && var.private_subnet_count > 0)
+    error_message = "Provide either private_subnet OR private_subnet_count, not both."
+  }
+  validation {
+    condition     = length(var.private_subnet) > 0 || var.private_subnet_count > 0
+    error_message = "You must provide at least one private subnet for the DB subnet group."
+  }
 
   description = <<-EOT
-  List of CIDR blocks for private subnets. These subnets will have internet access through
-  NAT Gateways but cannot be accessed directly from the internet. Each subnet should be a
-  subset of the VPC CIDR block. Example: ["10.0.3.0/24", "10.0.4.0/24"] for two private subnets.
+  List of CIDR blocks for private subnets. Private subnets have Internet access through NAT Gateways
+  but are not directly accessible from the Internet.
+  Example: ["10.0.3.0/24", "10.0.4.0/24"] for two private subnets.
+  EOT
+}
+
+variable "private_subnet_count" {
+  type    = number
+  default = 0
+
+  description = <<-EOT
+  The number of private subnets to auto-generate if `private_subnet` is not provided.
+  At least one private subnet is required if you plan to create a DB subnet group.
+  EOT
+}
+
+variable "subnet_newbits" {
+  type    = number
+  default = 8
+
+  description = <<-EOT
+  The number of new bits to use with `cidrsubnet` when auto-generating subnets.
+  Controls the subnet size.
+  EOT
+}
+
+variable "create_db_subnet" {
+  type    = bool
+  default = false
+
+  description = "Whether to create a DB Subnet Group using private subnets."
+}
+
+variable "subnet_group_name" {
+  type    = string
+  default = ""
+
+  description = <<-EOT
+  The name of the DB subnet group. If omitted, Terraform generates a random unique name.
   EOT
 }
 
 variable "public_subnet_tags" {
-  description = "Additional tags to apply to public subnets"
   type        = map(string)
   default     = {}
+  description = "Additional tags to apply to public subnets."
 }
 
 variable "private_subnet_tags" {
-  description = "Additional tags to apply to private subnets"
   type        = map(string)
   default     = {}
+  description = "Additional tags to apply to private subnets."
+}
+
+variable "db_subnet_group_tags" {
+  type        = map(string)
+  default     = {}
+  description = "Tags to apply to the DB subnet group."
 }
 
 variable "private_ip_map" {
@@ -71,8 +144,8 @@ variable "private_ip_map" {
   default = false
 
   description = <<-EOT
-  Whether to map public IP addresses on launch for private subnets. 
-  If set to false, instances in the private subnets will not receive public IPs automatically.
+  Whether instances in private subnets receive public IPs automatically.
+  Typically false for private subnets.
   EOT
 }
 
@@ -81,8 +154,9 @@ variable "instance_tenancy" {
   default = "default"
 
   description = <<-EOT
-  The instance tenancy for the VPC. The default value is "default", which means instances run on shared hardware.
-  If set to "dedicated", instances will run on dedicated hardware.
+  The instance tenancy for the VPC. Options:
+  - "default": instances run on shared hardware.
+  - "dedicated": instances run on dedicated hardware.
   EOT
 }
 
@@ -91,9 +165,8 @@ variable "enable_dns_hostnames" {
   default = false
 
   description = <<-EOT
-  Whether to enable DNS hostnames for instances in the VPC. 
-  When set to true, instances will be assigned a public DNS hostname.
-  Default is false.
+  Whether instances in the VPC receive public DNS hostnames.
+  Must be true for some AWS services like EC2 to have public DNS names.
   EOT
 }
 
@@ -102,19 +175,8 @@ variable "enable_dns_support" {
   default = true
 
   description = <<-EOT
-  Whether to enable DNS resolution in the VPC. When set to true, instances in the VPC can resolve domain names to IP addresses.
-  Default is true.
-  EOT
-}
-
-variable "tags" {
-  type    = map(string)
-  default = {}
-
-  description = <<-EOT
-  A map of tags to assign to resources created within the VPC. 
-  The default is an empty map, meaning no tags are applied unless specified.
-  You can provide key-value pairs for resources like the VPC, subnets, and security groups.
+  Whether DNS resolution is enabled in the VPC.
+  Required for instances to resolve domain names.
   EOT
 }
 
@@ -123,19 +185,139 @@ variable "ingress" {
   default = []
 
   description = <<-EOT
-  List of allowed ingress (incoming) traffic types for the security group. 
-  Valid options: "ssh", "http", "https". 
-  This list determines which ports are open to the specified CIDR blocks for incoming traffic.
-  If not specified, no ingress rules will be applied.
+  List of allowed ingress traffic types for the default security group.
+  Valid options are the keys of `local.ingress_options`.
+  If empty, no default ingress rules are applied.
+  EOT
+
+  validation {
+    condition     = alltrue([for type in var.ingress : contains(keys(local.ingress_options), type)])
+    error_message = "One or more ingress types provided are invalid. Valid options: ${join(", ", keys(local.ingress_options))}"
+  }
+}
+
+variable "custom_ingress" {
+  type = list(object({
+    cidr_ipv4   = string
+    from_port   = number
+    to_port     = number
+    ip_protocol = string
+  }))
+  default = []
+
+  description = <<-EOT
+  List of custom ingress rules for the security group.
+  Each item must include:
+    - cidr_ipv4
+    - from_port
+    - to_port
+    - ip_protocol
+  Example:
+    [
+      {
+        cidr_ipv4 = "1.2.3.4/32"
+        from_port = 1234
+        to_port = 1234
+        ip_protocol = "tcp"
+      }
+    ]
+  EOT
+}
+
+variable "create_endpoint" {
+  type        = bool
+  default     = false
+  description = "Whether to create VPC endpoints (Gateway or Interface)."
+}
+
+variable "endpoint_type" {
+  type    = string
+  default = "Gateway"
+
+  validation {
+    condition     = can(regex("(Gateway|Interface)", var.endpoint_type))
+    error_message = "The available endpoint types are 'Gateway' or 'Interface'."
+  }
+
+  description = "The type of VPC endpoint to create. Defaults to Gateway."
+}
+
+variable "vpc_endpoints" {
+  type = object({
+    # Gateway endpoints for a LIST of objects
+    gateway = optional(list(object({
+      service_name    = string
+      ip_address_type = optional(string, "ipv4")
+      policy          = optional(string, "")
+    })), [])
+
+    # Interface endpoints for a LIST of objects
+    interface = optional(list(object({
+      service_name        = string
+      subnet_ids          = optional(list(string), [])
+      security_group_ids  = optional(list(string), [])
+      private_dns_enabled = bool
+      policy              = optional(string, "")
+    })), [])
+  })
+
+  default = {
+    gateway   = []
+    interface = []
+  }
+
+  description = <<-EOT
+  Configuration for creating AWS VPC endpoints inside the module.
+
+  **gateway** (list, optional):
+    - Create one or more Gateway endpoints (e.g., S3, DynamoDB).
+    - Each object supports:
+        * service_name     – Required. AWS service (e.g., "s3", "dynamodb").
+        * ip_address_type  – Optional. "ipv4" (default) or "dualstack".
+        * policy           – Optional. JSON policy for fine-grained access.
+    - Defaults to an empty list (no gateway endpoints).
+
+  **interface** (list, optional):
+    - Create one or more Interface endpoints.
+    - Each object supports:
+        * service_name        – Required. AWS service (e.g., "ec2", "ssm").
+        * subnet_ids          – Optional. List of subnet IDs. Empty = module private subnets.
+        * security_group_ids  – Optional. List of SG IDs. Empty = module default SG.
+        * private_dns_enabled – Required. Boolean to enable private DNS.
+        * policy              – Optional. JSON policy.
+    - Defaults to an empty list (no interface endpoints).
   EOT
 
   validation {
     condition = alltrue([
-      for type in var.ingress : contains(["ssh", "http", "https", "kube"], type)
+      for g in var.vpc_endpoints.gateway : length(trimspace(g.service_name)) > 0
+      ]) && alltrue([
+      for i in var.vpc_endpoints.interface : length(trimspace(i.service_name)) > 0
     ])
     error_message = <<-EOT
-    One or more ingress types provided are invalid.
-      Valid options: ssh, http, https.
-    EOT
+  Validation failed for vpc_endpoints:
+  - Each gateway endpoint must include a non-empty service_name.
+  - Each interface endpoint must include a non-empty service_name.
+  EOT
   }
+
+}
+
+
+variable "gateway_endpoint_tags" {
+  type        = map(string)
+  default     = {}
+  description = "Tags to apply to gateway endpoints."
+}
+
+variable "interface_endpoint_tags" {
+  type        = map(string)
+  default     = {}
+  description = "Tags to apply to interface endpoints."
+}
+
+variable "tags" {
+  type        = map(string)
+  default     = {}
+  description = "Default tags applied to all resources in the VPC module."
 }

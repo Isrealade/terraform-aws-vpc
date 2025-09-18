@@ -1,2 +1,4 @@
 */:Zone.identifier
 *:Zone.identifier
+testing/
+.terraform*

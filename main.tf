@@ -17,13 +17,15 @@ resource "aws_vpc" "main" {
 ##################################################################
 
 resource "aws_subnet" "public" {
-  count                   = length(var.public_subnet)
+  count                   = length(local.public_subnet_cidrs)
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.public_subnet[count.index]
-  availability_zone       = local.azs[count.index]
+  cidr_block              = local.public_subnet_cidrs[count.index]
+  availability_zone       = local.azs[count.index % length(local.azs)]
   map_public_ip_on_launch = true
 
-  tags = merge(var.tags, var.public_subnet_tags, { Name = "${var.name}-public-${count.index}" })
+  tags = merge(var.tags, var.public_subnet_tags, {
+    Name = "${var.name}-public-${count.index}"
+  })
 }
 
 ##################################################################
@@ -31,13 +33,30 @@ resource "aws_subnet" "public" {
 ##################################################################
 
 resource "aws_subnet" "private" {
-  count                   = length(var.private_subnet)
+  count                   = length(local.private_subnet_cidrs)
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.private_subnet[count.index]
-  availability_zone       = local.azs[count.index]
+  cidr_block              = local.private_subnet_cidrs[count.index]
+  availability_zone       = local.azs[count.index % length(local.azs)]
   map_public_ip_on_launch = var.private_ip_map
 
-  tags = merge(var.tags, var.private_subnet_tags, { Name = "${var.name}-private-${count.index}" })
+  tags = merge(var.tags, var.private_subnet_tags, {
+    Name = "${var.name}-private-${count.index}"
+  })
+}
+
+
+##################################################################
+############# DB Subnet Group
+##################################################################
+
+resource "aws_db_subnet_group" "db_subnet" {
+  count      = var.create_db_subnet ? 1 : 0
+  name       = var.subnet_group_name
+  subnet_ids = aws_subnet.private[*].id
+
+  tags = merge(var.tags, var.db_subnet_group_tags, {
+    Name = "${var.name}-db_subnet_group-${count.index}"
+  })
 }
 
 ##################################################################
@@ -55,10 +74,10 @@ resource "aws_internet_gateway" "igw" {
 ##################################################################
 
 resource "aws_eip" "eip" {
-  count      = length(var.private_subnet)
+  count      = length(local.azs)
   depends_on = [aws_internet_gateway.igw]
 
-  tags = merge(var.tags, { Name = "${var.name}-${count.index}" })
+  tags = merge(var.tags, { Name = "${var.name}-eip-${count.index}" })
 }
 
 ##################################################################
@@ -66,12 +85,12 @@ resource "aws_eip" "eip" {
 ##################################################################
 
 resource "aws_nat_gateway" "nat" {
-  count         = length(var.private_subnet)
+  count         = length(local.azs)
   allocation_id = aws_eip.eip[count.index].id
   subnet_id     = aws_subnet.public[count.index % length(aws_subnet.public)].id
   depends_on    = [aws_internet_gateway.igw]
 
-  tags = merge(var.tags, { Name = "${var.name}-${count.index}" })
+  tags = merge(var.tags, { Name = "${var.name}-nat-${count.index}" })
 }
 
 ##################################################################
@@ -80,7 +99,7 @@ resource "aws_nat_gateway" "nat" {
 
 ## PUBLIC ROUTE TABLE AND ROUTE 
 resource "aws_route_table" "public" {
-  count  = length(var.public_subnet)
+  count  = length(local.azs)
   vpc_id = aws_vpc.main.id
 
   route {
@@ -88,13 +107,12 @@ resource "aws_route_table" "public" {
     gateway_id = aws_internet_gateway.igw.id
   }
 
-  tags = merge(var.tags, { Name = "${var.name}-${count.index}" })
+  tags = merge(var.tags, { Name = "${var.name}-public-rt-${local.azs[count.index]}" })
 }
-
 
 ## PRIVATE ROUTE TABLE AND ROUTE 
 resource "aws_route_table" "private" {
-  count  = length(var.private_subnet)
+  count  = length(local.azs)
   vpc_id = aws_vpc.main.id
 
   route {
@@ -102,8 +120,9 @@ resource "aws_route_table" "private" {
     nat_gateway_id = aws_nat_gateway.nat[count.index].id
   }
 
-  tags = merge(var.tags, { Name = "${var.name}-${count.index}" })
+  tags = merge(var.tags, { Name = "${var.name}-private-rt-${local.azs[count.index]}" })
 }
+
 
 ##################################################################
 ############# Route Table association
@@ -111,19 +130,20 @@ resource "aws_route_table" "private" {
 
 ## PUBLIC ROUTE TABLE ASSOCIATION
 resource "aws_route_table_association" "public" {
-  count          = length(aws_subnet.public)
+  count = length(aws_subnet.public)
+
   subnet_id      = aws_subnet.public[count.index].id
-  route_table_id = aws_route_table.public[count.index].id
+  route_table_id = local.public_rts_map[aws_subnet.public[count.index].availability_zone]
 }
 
 
 ## PRIVATE ROUTE TABLE ASSOCIATION
 resource "aws_route_table_association" "private" {
-  count          = length(aws_subnet.private)
-  subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private[count.index].id
-}
+  count = length(aws_subnet.private)
 
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = local.private_rts_map[aws_subnet.private[count.index].availability_zone]
+}
 
 ##################################################################
 ############# Security Group
@@ -147,10 +167,79 @@ resource "aws_vpc_security_group_ingress_rule" "ingress" {
   to_port           = each.value.to_port
 }
 
+## CUSTOM INGRESS RULE
+resource "aws_vpc_security_group_ingress_rule" "custom" {
+  for_each          = { for idx, rule in var.custom_ingress : idx => rule }
+  security_group_id = aws_security_group.security_group.id
+  cidr_ipv4         = each.value.cidr_ipv4
+  from_port         = each.value.from_port
+  to_port           = each.value.to_port
+  ip_protocol       = each.value.ip_protocol
+}
 
 ## EGRESS RULE
 resource "aws_vpc_security_group_egress_rule" "egress" {
   security_group_id = aws_security_group.security_group.id
   cidr_ipv4         = "0.0.0.0/0"
   ip_protocol       = "-1"
+}
+
+
+##################################################################
+############# VPC Endpoint
+##################################################################
+
+### GATEWAY ENDPOINT
+resource "aws_vpc_endpoint" "gateway" {
+  count = var.create_endpoint ? length(var.vpc_endpoints.gateway) : 0
+
+  vpc_id            = aws_vpc.main.id
+  vpc_endpoint_type = "Gateway"
+  service_name      = "com.amazonaws.${local.region}.${var.vpc_endpoints.gateway[count.index].service_name}"
+  route_table_ids   = aws_route_table.private[*].id
+  ip_address_type   = lookup(var.vpc_endpoints.gateway[count.index], "ip_address_type", "ipv4")
+
+  policy = lookup(var.vpc_endpoints.gateway[count.index], "policy", jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = "*"
+      Action    = "*"
+      Resource  = "*"
+    }]
+  }))
+
+  tags = merge(
+    var.tags,
+    var.gateway_endpoint_tags,
+    {
+      Name = "${var.name}-gateway-${var.vpc_endpoints.gateway[count.index].service_name}"
+    }
+  )
+}
+
+### INTERFACE ENDPOINT
+resource "aws_vpc_endpoint" "interface" {
+  for_each = var.create_endpoint ? { for idx, ep in var.vpc_endpoints.interface : idx => ep } : {}
+
+  vpc_id              = aws_vpc.main.id
+  vpc_endpoint_type   = "Interface"
+  service_name        = "com.amazonaws.${local.region}.${each.value.service_name}"
+  subnet_ids          = length(each.value.subnet_ids) > 0 ? each.value.subnet_ids : local.interface_subnets
+  security_group_ids  = length(each.value.security_group_ids) > 0 ? each.value.security_group_ids : [aws_security_group.security_group.id]
+  private_dns_enabled = each.value.private_dns_enabled
+
+  policy = lookup(each.value, "policy", jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = "*"
+      Action    = "*"
+      Resource  = "*"
+    }]
+  }))
+
+  tags = merge(var.tags, var.interface_endpoint_tags, {
+    Name = "${var.name}-interface_endpoint-${each.key}"
+  })
 }

@@ -1,29 +1,58 @@
-   # VPC Example
+````markdown
+# Full VPC Example
 
-   This directory contains an example of how to use the AWS VPC Terraform module.
+This example demonstrates how to use the VPC module to create:
 
-   ## Usage
+- A VPC with public and private subnets across multiple Availability Zones
+- NAT Gateways and Internet Gateway
+- Route tables for public and private subnets
+- Security groups with common ingress rules (SSH, HTTP, HTTPS, PostgreSQL)
+- Optional DB Subnet Group for RDS/Aurora
+- Gateway and Interface VPC Endpoints (S3, EC2, SSM)
+- Custom tags applied to all resources
 
-   1. **Configure AWS Provider**: Ensure you have your AWS credentials configured.
-   2. **Initialize Terraform**: Run `terraform init` to initialize the working directory.
-   3. **Plan the Deployment**: Run `terraform plan` to see the resources that will be created.
-   4. **Apply the Configuration**: Run `terraform apply` to create the resources.
+---
 
-   ## Requirements
+## Usage
 
-   - Terraform version >= 1.0.0
-   - AWS provider version >= 4.0
+```hcl
+module "vpc" {
+  source  = "../../"  # Path to your VPC module
 
-   ## Providers
+  name = "example-vpc"
+  cidr = "10.10.0.0/16"
 
-   - `aws`: The AWS provider is required to manage AWS resources.
+  public_subnet  = ["10.10.1.0/24", "10.10.2.0/24"]
+  private_subnet = ["10.10.3.0/24", "10.10.4.0/24"]
 
-   ## Modules
+  create_db_subnet  = true
+  subnet_group_name = "example-db-subnet-group"
 
-   - `vpc`: This module creates a complete VPC infrastructure, including subnets, NAT Gateways, and security groups.
+  create_endpoint = true
+  vpc_endpoints = {
+    gateway = [
+      { service_name = "s3", ip_address_type = "ipv4", policy = "" }
+    ]
+    interface = [
+      { service_name = "ec2", subnet_ids = [], security_group_ids = [], private_dns_enabled = true },
+      { service_name = "ssm", subnet_ids = [], security_group_ids = [], private_dns_enabled = true }
+    ]
+  }
 
-   ## Outputs
+  ingress = ["ssh", "http", "https", "postgresql"]
 
-   - `vpc_id`: The ID of the created VPC.
-   - `public_subnet_ids`: List of public subnet IDs.
-   - `private_subnet_ids`: List of private subnet IDs.
+  tags = {
+    Environment = "example"
+    Project     = "full-vpc"
+  }
+}
+````
+
+---
+
+## Notes
+
+* When using `count` to create public or private subnets, **avoid mixing with manual CIDR blocks** unless you account for `subnet_newbits` to prevent CIDR conflicts.
+* Interface endpoints default to the first private subnet in each AZ if `subnet_ids` are not provided.
+* Security group defaults can be extended using `custom_ingress`.
+* DB Subnet Group is optional; enable with `create_db_subnet = true`.
