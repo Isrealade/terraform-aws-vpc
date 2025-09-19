@@ -237,6 +237,7 @@ module "vpc" {
 | public\_subnet\_route\_table\_map          | Map of public subnet ID to its route table ID              |
 | private\_route\_table\_ids                 | Map of AZ to private route table IDs                       |
 | security\_group\_id                        | Main VPC security group ID                                 |
+| db\_subnet\_group\_name                    | DB Subnet Group name (empty if not created)                |
 | db\_subnet\_group\_id                      | DB Subnet Group ID (empty if not created)                  |
 | db\_subnet\_group\_subnet\_ids             | Subnets included in DB Subnet Group                        |
 | gateway\_endpoint\_ids                     | Gateway endpoint IDs                                       |
