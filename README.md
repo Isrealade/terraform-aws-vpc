@@ -3,8 +3,8 @@
 This Terraform module creates a fully-featured **VPC infrastructure** on AWS, including:
 
 * Public and private subnets across multiple Availability Zones (AZs)
-* Internet Gateway and NAT Gateways (with per-AZ NAT for private subnets)
-* Route tables for public (per-AZ) and private subnets
+* Internet Gateway and NAT Gateways (configurable: single or per‑AZ)
+* Single public route table shared by all public subnets; private route tables per‑AZ
 * Security groups with predefined and custom ingress rules
 * Optional DB subnet group for RDS/Aurora
 * Optional Gateway and Interface VPC Endpoints
@@ -13,27 +13,41 @@ This Terraform module creates a fully-featured **VPC infrastructure** on AWS, in
 The module is highly configurable and suitable for **single-AZ and multi-AZ production environments**.
 
 ---
+## Breaking changes (vNext)
+
+- Switched to a single public route table. Output renamed from `public_route_table_ids` to `public_route_table_id`.
+- Subnets now use `for_each` with stable keys; identities will differ from earlier versions using `count`.
+- Added `private_subnet_offset` and changed default CIDR math to avoid shifts; review your planned CIDR ranges if upgrading.
+- NAT strategy variables introduced: `enable_nat`, `single_nat`, `one_nat_per_az`.
+- Endpoint tagging model changed:
+  - Per-endpoint `tags` supported in each gateway/interface object.
+  - New module-level defaults: `gateway_endpoints_default_tags`, `interface_endpoints_default_tags`.
+  - Previous endpoint tag variables removed.
+
+---
 
 ## Key Features
 
 * Create a VPC with a configurable CIDR block
 * Auto-generate public/private subnets with `subnet_newbits` or provide your own CIDRs
 * Internet Gateway for public subnets
-* NAT Gateways for private subnets (per-AZ deployment for HA)
-* Route tables for public (per-AZ) and private subnets
+* NAT Gateways for private subnets (single or per‑AZ for HA)
+* Single public route table; private route tables per‑AZ
 * Security groups with predefined and custom ingress rules
 * Optional DB Subnet Group
 * Optional Gateway and Interface VPC Endpoints
 * Custom tags for all resources
 
-**⚠️ Note on Subnet Creation:**
-When using `count` to auto-generate subnets, Terraform calculates CIDRs using `subnet_newbits` (default = 8). Avoid specifying both `public_subnet`/`private_subnet` and `*_subnet_count` at the same time to prevent CIDR conflicts. You can also manually provide subnet CIDRs based on your `subnet_newbits` calculation.
+**⚠️ Notes**
+- Auto subnets use `subnet_newbits` (default 8). Do not specify both explicit CIDR lists and `*_subnet_count`.
+- Private subnets use a fixed `private_subnet_offset` to avoid CIDR shifts when counts change.
+- Subnets are created with `for_each` and stable keys to minimize resource churn when counts change.
 
 ---
 
 ## Usage Examples
 
-### 1. Simple VPC with Auto-Generated Subnets
+### 1. Simple VPC with Auto-Generated Subnets (single NAT, default)
 
 ```hcl
 module "vpc" {
@@ -45,6 +59,12 @@ module "vpc" {
   # Automatically create 2 public and 2 private subnets
   public_subnet_count  = 2
   private_subnet_count = 2
+  private_subnet_offset = 64
+
+  # NAT strategy
+  enable_nat     = true
+  single_nat     = true
+  one_nat_per_az = false
   
   ingress = ["ssh", "http", "https"]
 }
@@ -54,7 +74,7 @@ module "vpc" {
 
 ---
 
-### 2. VPC with Custom Subnet CIDRs and Multi-AZ NAT
+### 2. VPC with Custom Subnet CIDRs and Per‑AZ NAT
 
 ```hcl
 module "vpc" {
@@ -73,6 +93,11 @@ module "vpc" {
   enable_dns_support   = true
   enable_dns_hostnames = true
 
+  # NAT strategy
+  enable_nat     = true
+  single_nat     = false
+  one_nat_per_az = true
+
   ingress = ["ssh", "http", "https"]
 
   tags = {
@@ -82,7 +107,7 @@ module "vpc" {
 }
 ```
 
-> Public subnets now have **per-AZ route tables** for better scalability and fault isolation. NAT Gateways are deployed one per AZ.
+> Public subnets share a single route table to the IGW. NAT Gateways are deployed one per AZ.
 
 ---
 
@@ -114,7 +139,7 @@ module "vpc" {
 
 ---
 
-### 4. VPC with Gateway and Interface Endpoints
+### 4. VPC with Gateway and Interface Endpoints (per-endpoint tags + defaults)
 
 ```hcl
 module "vpc" {
@@ -135,12 +160,14 @@ module "vpc" {
         subnet_ids          = [] # Defaults to module private subnets (per-AZ)
         security_group_ids  = [] # Defaults to VPC SG
         private_dns_enabled = true
+        tags = { Owner = "platform" }
       },
       {
         service_name        = "ssm"
         subnet_ids          = []
         security_group_ids  = []
         private_dns_enabled = true
+        tags = { ManagedBy = "terraform" }
       }
     ]
 
@@ -149,6 +176,7 @@ module "vpc" {
         service_name    = "s3"
         ip_address_type = "ipv4"
         policy          = ""
+        tags            = { Team = "networking" }
       }
     ]
   }
@@ -157,11 +185,11 @@ module "vpc" {
 }
 ```
 
-> Interface endpoints pick **one private subnet per AZ by default** if `subnet_ids` is empty. Gateway endpoints are regional and tagged per module configuration.
+> Interface endpoints pick **one private subnet per AZ by default** if `subnet_ids` is empty.
 
 ---
 
-## Inputs
+## Inputs (not exhaustive)
 
 | Name                   | Description                                              | Type           | Default | Required |
 | ---------------------- | -------------------------------------------------------- | -------------- | ------- | :------: |
@@ -173,6 +201,13 @@ module "vpc" {
 | private\_subnet        | List of private subnet CIDRs                             | `list(string)` | `[]`    |    no    |
 | private\_subnet\_count | Number of private subnets if CIDRs not provided          | `number`       | 0       |    no    |
 | subnet\_newbits        | Bits to increment subnet size for auto-generated subnets | `number`       | 8       |    no    |
+| private\_subnet\_offset| Fixed offset for private auto-CIDRs to avoid shifts       | `number`       | 64      |    no    |
+| enable\_nat            | Enable NAT Gateways                                       | `bool`         | true    |    no    |
+| single\_nat            | Single NAT Gateway for all private subnets                | `bool`         | true    |    no    |
+| one\_nat\_per\_az      | NAT Gateway per AZ                                       | `bool`         | false   |    no    |
+| gateway\_endpoints\_default\_tags   | Default tags for all Gateway endpoints     | `map(string)`  | `{}`    |    no    |
+| interface\_endpoints\_default\_tags | Default tags for all Interface endpoints   | `map(string)`  | `{}`    |    no    |
+| vpc\_endpoints         | Endpoint definitions (supports per-endpoint tags)         | `object`       | `{}`    |    no    |
 | create\_db\_subnet     | Create a DB subnet group                                 | `bool`         | false   |    no    |
 | create\_endpoint       | Create Gateway or Interface endpoints                    | `bool`         | false   |    no    |
 | vpc\_endpoints         | Object for Gateway and Interface endpoints               | `object`       | `{}`    |    no    |
@@ -182,25 +217,25 @@ module "vpc" {
 
 ---
 
-## Outputs
+## Outputs (selected)
 
 | Name                                       | Description                                                |
 | ------------------------------------------ | ---------------------------------------------------------- |
 | vpc\_id                                    | VPC ID                                                     |
 | availability\_zones                        | List of AZs used                                           |
 | public\_subnet\_ids                        | List of public subnet IDs                                  |
-| public\_subnet\_map                        | Map of index to public subnet IDs                          |
+| public\_subnet\_map                        | Map of stable keys to public subnet IDs                    |
 | private\_subnet\_ids                       | List of private subnet IDs                                 |
-| private\_subnet\_map                       | Map of index to private subnet IDs                         |
+| private\_subnet\_map                       | Map of stable keys to private subnet IDs                   |
 | nat\_gateway\_ids                          | List of NAT Gateway IDs                                    |
 | nat\_gateway\_public\_ips                  | List of NAT Gateway public IPs                             |
 | nat\_gateway\_ips\_map                     | Indexed map of NAT Gateway public IPs                      |
 | elastic\_ip\_ids                           | List of Elastic IP IDs associated with NATs                |
 | nat\_gateway\_subnet\_ids                  | List of subnets where NAT Gateways are deployed            |
 | internet\_gateway\_id                      | Internet Gateway ID                                        |
-| public\_route\_table\_ids                  | Map of AZ to public route table ID (per-AZ public subnets) |
+| public\_route\_table\_id                   | ID of the single public route table                        |
 | public\_subnet\_route\_table\_map          | Map of public subnet ID to its route table ID              |
-| private\_route\_table\_ids                 | Map of index to private route table IDs                    |
+| private\_route\_table\_ids                 | Map of AZ to private route table IDs                       |
 | security\_group\_id                        | Main VPC security group ID                                 |
 | db\_subnet\_group\_id                      | DB Subnet Group ID (empty if not created)                  |
 | db\_subnet\_group\_subnet\_ids             | Subnets included in DB Subnet Group                        |

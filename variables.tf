@@ -95,6 +95,12 @@ variable "private_subnet_count" {
   EOT
 }
 
+variable "private_subnet_offset" {
+  type        = number
+  default     = 64
+  description = "Fixed offset for private subnets when auto-generating CIDRs: private i uses index i + private_subnet_offset. Keep constant after first deploy to avoid CIDR shifts."
+}
+
 variable "subnet_newbits" {
   type    = number
   default = 8
@@ -230,25 +236,13 @@ variable "create_endpoint" {
   description = "Whether to create VPC endpoints (Gateway or Interface)."
 }
 
-variable "endpoint_type" {
-  type    = string
-  default = "Gateway"
-
-  validation {
-    condition     = can(regex("(Gateway|Interface)", var.endpoint_type))
-    error_message = "The available endpoint types are 'Gateway' or 'Interface'."
-  }
-
-  description = "The type of VPC endpoint to create. Defaults to Gateway."
-}
-
 variable "vpc_endpoints" {
   type = object({
     # Gateway endpoints for a LIST of objects
     gateway = optional(list(object({
-      service_name    = string
-      ip_address_type = optional(string, "ipv4")
-      policy          = optional(string, "")
+      service_name = string
+      policy       = optional(string, "")
+      tags         = optional(map(string), {})
     })), [])
 
     # Interface endpoints for a LIST of objects
@@ -258,6 +252,7 @@ variable "vpc_endpoints" {
       security_group_ids  = optional(list(string), [])
       private_dns_enabled = bool
       policy              = optional(string, "")
+      tags                = optional(map(string), {})
     })), [])
   })
 
@@ -304,17 +299,42 @@ variable "vpc_endpoints" {
 }
 
 
-variable "gateway_endpoint_tags" {
-  type        = map(string)
-  default     = {}
-  description = "Tags to apply to gateway endpoints."
+variable "enable_nat" {
+  type        = bool
+  default     = true
+  description = "Turn NAT Gateways on/off. If there are no private subnets, no NATs are created."
 }
 
-variable "interface_endpoint_tags" {
+variable "single_nat" {
+  type        = bool
+  default     = true
+  description = "When enable_nat=true, create a single NAT Gateway for all private subnets."
+
+  validation {
+    condition     = (!var.enable_nat) || (var.single_nat != var.one_nat_per_az)
+    error_message = "With enable_nat=true, set exactly one of single_nat or one_nat_per_az to true."
+  }
+}
+
+variable "one_nat_per_az" {
+  type        = bool
+  default     = false
+  description = "When enable_nat=true, create one NAT Gateway per availability zone."
+}
+
+
+variable "gateway_endpoints_default_tags" {
   type        = map(string)
   default     = {}
-  description = "Tags to apply to interface endpoints."
+  description = "Default tags applied to all Gateway endpoints. Per-endpoint tags override on key conflicts."
 }
+
+variable "interface_endpoints_default_tags" {
+  type        = map(string)
+  default     = {}
+  description = "Default tags applied to all Interface endpoints. Per-endpoint tags override on key conflicts."
+}
+
 
 variable "tags" {
   type        = map(string)

@@ -4,8 +4,8 @@
 This example demonstrates how to use the VPC module to create:
 
 - A VPC with public and private subnets across multiple Availability Zones
-- NAT Gateways and Internet Gateway
-- Route tables for public and private subnets
+- Internet Gateway and NAT Gateways (single NAT by default; optional per‑AZ NAT)
+- Single public route table; private route tables per‑AZ
 - Security groups with common ingress rules (SSH, HTTP, HTTPS, PostgreSQL)
 - Optional DB Subnet Group for RDS/Aurora
 - Gateway and Interface VPC Endpoints (S3, EC2, SSM)
@@ -28,16 +28,25 @@ module "vpc" {
   create_db_subnet  = true
   subnet_group_name = "example-db-subnet-group"
 
+  # NAT strategy
+  enable_nat     = true
+  single_nat     = true
+  one_nat_per_az = false
+
   create_endpoint = true
   vpc_endpoints = {
     gateway = [
-      { service_name = "s3", ip_address_type = "ipv4", policy = "" }
+      { service_name = "s3", ip_address_type = "ipv4", policy = "", tags = { Team = "networking" } }
     ]
     interface = [
-      { service_name = "ec2", subnet_ids = [], security_group_ids = [], private_dns_enabled = true },
-      { service_name = "ssm", subnet_ids = [], security_group_ids = [], private_dns_enabled = true }
+      { service_name = "ec2", subnet_ids = [], security_group_ids = [], private_dns_enabled = true, tags = { Owner = "platform" } },
+      { service_name = "ssm", subnet_ids = [], security_group_ids = [], private_dns_enabled = true, tags = { ManagedBy = "terraform" } }
     ]
   }
+
+  # Default endpoint tags for all endpoints of each type
+  gateway_endpoints_default_tags   = { Environment = "example" }
+  interface_endpoints_default_tags = { Environment = "example" }
 
   ingress = ["ssh", "http", "https", "postgresql"]
 

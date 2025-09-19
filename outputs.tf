@@ -15,26 +15,26 @@ output "availability_zones" {
 # Public Subnets
 ##################################################################
 output "public_subnet_ids" {
-  value       = [for subnet in aws_subnet.public : subnet.id]
+  value       = values(aws_subnet.public)[*].id
   description = "List of public subnet IDs with direct internet access."
 }
 
 output "public_subnet_map" {
-  value       = { for idx, subnet in aws_subnet.public : idx => subnet.id }
-  description = "Map of index to public subnet IDs for placement and HA."
+  value       = { for key, subnet in aws_subnet.public : key => subnet.id }
+  description = "Map of stable keys to public subnet IDs for placement and HA."
 }
 
 ##################################################################
 # Private Subnets
 ##################################################################
 output "private_subnet_ids" {
-  value       = [for subnet in aws_subnet.private : subnet.id]
+  value       = values(aws_subnet.private)[*].id
   description = "List of private subnet IDs. These subnets access the internet via NAT."
 }
 
 output "private_subnet_map" {
-  value       = { for idx, subnet in aws_subnet.private : idx => subnet.id }
-  description = "Map of index to private subnet IDs for placement and HA."
+  value       = { for key, subnet in aws_subnet.private : key => subnet.id }
+  description = "Map of stable keys to private subnet IDs for placement and HA."
 }
 
 ##################################################################
@@ -71,9 +71,9 @@ output "internet_gateway_id" {
 ##################################################################
 # Route Tables
 ##################################################################
-output "public_route_table_ids" {
-  value       = { for az, rt in aws_route_table.public : az => rt.id }
-  description = "Map of availability zone to public route table ID."
+output "public_route_table_id" {
+  value       = aws_route_table.public.id
+  description = "ID of the single public route table."
 }
 
 # output "public_subnet_route_table_map" {
