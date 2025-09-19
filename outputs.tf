@@ -109,6 +109,11 @@ output "security_group_id" {
 ##################################################################
 # DB Subnet Group
 ##################################################################
+output "db_subnet_group_name" {
+  value       = var.create_db_subnet ? aws_db_subnet_group.db_subnet[0].name : ""
+  description = "The name of the DB Subnet Group created. Empty if create_db_subnet is false."
+}
+
 output "db_subnet_group_id" {
   value       = var.create_db_subnet ? aws_db_subnet_group.db_subnet[0].id : ""
   description = "The ID of the DB Subnet Group created. Empty if create_db_subnet is false."
