@@ -13,7 +13,7 @@ This Terraform module creates a fully-featured **VPC infrastructure** on AWS, in
 The module is highly configurable and suitable for **single-AZ and multi-AZ production environments**.
 
 ---
-## Breaking changes (vNext)
+## Breaking changes (v2.0.0)
 
 - Switched to a single public route table. Output renamed from `public_route_table_ids` to `public_route_table_id`.
 - Subnets now use `for_each` with stable keys; identities will differ from earlier versions using `count`.
