@@ -3,7 +3,12 @@
 ##################################################################
 output "vpc_id" {
   value       = aws_vpc.main.id
-  description = "The ID of the VPC. Useful for referencing in other modules or resources."
+  description = "The ID of the VPC."
+}
+
+output "cidr" {
+  value       = aws_vpc.main.cidr_block
+  description = "The CIDR block of the VPC."
 }
 
 output "availability_zones" {

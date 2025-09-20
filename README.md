@@ -222,6 +222,7 @@ module "vpc" {
 | Name                                       | Description                                                |
 | ------------------------------------------ | ---------------------------------------------------------- |
 | vpc\_id                                    | VPC ID                                                     |
+| vpc\_cidr                                  | The CIDR block of the VPC.                                 |
 | availability\_zones                        | List of AZs used                                           |
 | public\_subnet\_ids                        | List of public subnet IDs                                  |
 | public\_subnet\_map                        | Map of stable keys to public subnet IDs                    |
