@@ -73,10 +73,6 @@ variable "private_subnet" {
     condition     = !(length(var.private_subnet) > 0 && var.private_subnet_count > 0)
     error_message = "Provide either private_subnet OR private_subnet_count, not both."
   }
-  validation {
-    condition     = length(var.private_subnet) > 0 || var.private_subnet_count > 0
-    error_message = "You must provide at least one private subnet for the DB subnet group."
-  }
 
   description = <<-EOT
   List of CIDR blocks for private subnets. Private subnets have Internet access through NAT Gateways
