@@ -1,0 +1,32 @@
+| Name                                   | Description                                                         |
+| -------------------------------------- | ------------------------------------------------------------------- |
+| vpc_id                                 | VPC ID                                                              |
+| vpc_cidr                               | The CIDR block of the VPC.                                          |
+| availability_zones                     | List of AZs used                                                    |
+| public_subnet_ids                      | List of public subnet IDs                                           |
+| public_subnet_map                      | Map of stable keys to public subnet IDs                             |
+| private_subnet_ids                     | List of private subnet IDs                                          |
+| private_subnet_map                     | Map of stable keys to private subnet IDs                            |
+| nat_gateway_ids                        | List of NAT Gateway IDs                                             |
+| nat_gateway_public_ips                 | List of NAT Gateway public IPs                                      |
+| nat_gateway_ips_map                    | Indexed map of NAT Gateway public IPs                               |
+| elastic_ip_ids                         | List of Elastic IP IDs associated with NATs                         |
+| nat_gateway_subnet_ids                 | List of subnets where NAT Gateways are deployed                     |
+| internet_gateway_id                    | Internet Gateway ID                                                 |
+| public_route_table_id                  | ID of the single public route table                                 |
+| public_subnet_route_table_map          | Map of public subnet ID to its route table ID                       |
+| private_route_table_ids                | Map of AZ to private route table IDs                                |
+| security_group_id                      | Main VPC security group ID                                          |
+| db_subnet_group_name                   | DB Subnet Group name (empty if not created)                         |
+| db_subnet_group_id                     | DB Subnet Group ID (empty if not created)                           |
+| db_subnet_group_subnet_ids             | Subnets included in DB Subnet Group                                 |
+| gateway_endpoint_ids                   | Gateway endpoint IDs                                                |
+| gateway_endpoint_services              | Gateway endpoint service names                                      |
+| interface_endpoint_ids                 | Interface endpoint IDs                                              |
+| interface_endpoint_subnet_ids          | Subnets used by interface endpoints                                 |
+| interface_endpoint_sg_ids              | Security groups used by interface endpoints                         |
+| interface_endpoint_private_dns_enabled | Private DNS enabled flag for interface endpoints                    |
+| flow_log_id                        | The ID of the VPC Flow Log.                                         |
+| log_group_name                       | The name of the CloudWatch Log Group used for VPC Flow Logs.        |
+| log_group_arn                      | The ARN of the CloudWatch Log Group used for VPC Flow Logs.         |
+| flow_log_iam_role_arn                  | The ARN of the IAM Role used by Flow Logs to publish to CloudWatch. |

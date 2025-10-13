@@ -250,3 +250,83 @@ resource "aws_vpc_endpoint" "interface" {
     }
   )
 }
+
+##################################################################
+############# Cloudwatch Logs
+##################################################################
+
+### IAM Role for VPC Flow Logs
+data "aws_iam_policy_document" "vpc_flow_logs_assume_role" {
+  count = var.enable_flow_logs ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["vpc-flow-logs.amazonaws.com"]
+    }
+
+    actions = ["sts:AssumeRole"]
+  }
+}
+
+resource "aws_iam_role" "vpc_flow_logs_role" {
+  count = var.enable_flow_logs ? 1 : 0
+
+  name               = "vpc-flow-logs-role"
+  assume_role_policy = data.aws_iam_policy_document.vpc_flow_logs_assume_role[0].json
+
+  tags = var.tags
+}
+
+data "aws_iam_policy_document" "vpc_flow_logs_permissions" {
+  count = var.enable_flow_logs ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+      "logs:DescribeLogGroups",
+      "logs:DescribeLogStreams"
+    ]
+
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "vpc_flow_logs_policy" {
+  count = var.enable_flow_logs ? 1 : 0
+
+  name   = "vpc-flow-logs-policy"
+  role   = aws_iam_role.vpc_flow_logs_role[0].id
+  policy = data.aws_iam_policy_document.vpc_flow_logs_permissions[0].json
+}
+
+### CloudWatch Log Group for Flow Logs
+resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
+  count = var.enable_flow_logs ? 1 : 0
+
+  name              = var.log_group.name
+  skip_destroy      = var.log_group.skip_destroy
+  log_group_class   = var.log_group.log_group_class
+  retention_in_days = var.log_group.retention_in_days
+
+  tags = merge(var.tags, var.log_group.tags, { Name = "${var.name}-log_group" })
+}
+
+
+###  VPC Flow Logs Resource
+resource "aws_flow_log" "vpc" {
+  count = var.enable_flow_logs ? 1 : 0
+
+  vpc_id          = aws_vpc.main.id
+  traffic_type    = var.flow_log.traffic_type
+  log_destination = aws_cloudwatch_log_group.vpc_flow_logs[0].arn
+  iam_role_arn    = aws_iam_role.vpc_flow_logs_role[0].arn
+
+  tags = merge(var.tags, var.flow_log.tags, { Name = "${var.name}-flow_log" })
+}

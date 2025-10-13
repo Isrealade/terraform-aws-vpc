@@ -331,6 +331,52 @@ variable "interface_endpoints_default_tags" {
   description = "Default tags applied to all Interface endpoints. Per-endpoint tags override on key conflicts."
 }
 
+variable "enable_flow_logs" {
+  type        = bool
+  default     = false
+  description = "Set to true to enable VPC Flow Logs and related CloudWatch resources."
+}
+
+variable "flow_log" {
+  type = object({
+    traffic_type = string
+    tags         = optional(map(string))
+  })
+
+  default = {
+    traffic_type = "ALL"
+  }
+
+  description = "Configuration object for VPC Flow Logs."
+
+  validation {
+    condition     = contains(local.traffic_type, var.flow_log.traffic_type)
+    error_message = "Invalid traffic_type provided. Valid values are: ${join(", ", local.traffic_type)}"
+  }
+}
+
+variable "log_group" {
+  type = object({
+    name              = optional(string)
+    skip_destroy      = optional(bool)
+    log_group_class   = optional(string)
+    retention_in_days = optional(number)
+    tags              = optional(map(string))
+  })
+
+  default = {
+    skip_destroy      = true
+    log_group_class   = "STANDARD"
+    retention_in_days = 7
+  }
+
+  description = "Configuration for the CloudWatch Log Group used by VPC Flow Logs."
+
+  validation {
+    condition     = contains(local.log_group_class, var.log_group.log_group_class)
+    error_message = "Invalid log_group_class. Valid values are: ${join(", ", local.log_group_class)}"
+  }
+}
 
 variable "tags" {
   type        = map(string)

@@ -163,3 +163,30 @@ output "interface_endpoint_private_dns_enabled" {
   value       = length(aws_vpc_endpoint.interface) > 0 ? { for idx, ep in aws_vpc_endpoint.interface : idx => ep.private_dns_enabled } : {}
   description = "Map of keys to private DNS enabled status for each Interface Endpoint."
 }
+
+##################################################################
+# Flow Logs and Cloudwatch
+##################################################################
+## Flow Log ID
+output "flow_log_id" {
+  description = "The ID of the VPC Flow Log."
+  value       = try(aws_flow_log.vpc[0].id, null)
+}
+
+## CloudWatch Log Group Name
+output "log_group_name" {
+  description = "The name of the CloudWatch Log Group used for VPC Flow Logs."
+  value       = try(aws_cloudwatch_log_group.vpc_flow_logs[0].name, null)
+}
+
+## CloudWatch Log Group ARN
+output "log_group_arn" {
+  description = "The ARN of the CloudWatch Log Group used for VPC Flow Logs."
+  value       = try(aws_cloudwatch_log_group.vpc_flow_logs[0].arn, null)
+}
+
+## IAM Role for Flow Logs
+output "flow_log_iam_role_arn" {
+  description = "The ARN of the IAM Role used by Flow Logs to publish to CloudWatch."
+  value       = try(aws_iam_role.vpc_flow_logs_role[0].arn, null)
+}

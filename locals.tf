@@ -160,4 +160,6 @@ locals {
     }
   }
 
+  traffic_type    = ["ACCEPT", "REJECT", "ALL"]
+  log_group_class = ["STANDARD", "INFREQUENT_ACCESS", "DELIVERY"]
 }
